@@ -96,7 +96,7 @@ function sanitize(config: EntityConfig, body: Record<string, unknown>) {
 }
 
 async function logAction(
-  admin: ReturnType<typeof createSupabaseAdminClient>,
+  admin: Awaited<ReturnType<typeof createSupabaseAdminClient>>,
   session: { userId: string | null; email: string | null },
   action: string,
   entity: string,
