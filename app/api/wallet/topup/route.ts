@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hasServiceRole } from "@/lib/env";
+import { getMaintenanceSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,15 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Inicia sesión." }, { status: 401 });
+
+  // Bloqueo de recargas en modo mantenimiento (validado en el servidor).
+  const maintenance = await getMaintenanceSettings();
+  if (maintenance.enabled) {
+    return NextResponse.json(
+      { error: "La tienda está en mantenimiento. No se pueden solicitar recargas ahora." },
+      { status: 503 },
+    );
+  }
 
   const form = await request.formData();
   const amount = Number(String(form.get("amount") ?? "").replace(",", "."));
