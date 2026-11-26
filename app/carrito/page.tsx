@@ -38,7 +38,7 @@ export default async function CartPage() {
         <EmptyState
           icon="⚙️"
           title="Configuración incompleta"
-          description="El servidor necesita SUPABASE_SERVICE_ROLE_KEY para gestionar el carrito de forma segura."
+          description="Inicia sesión para guardar tu carrito en tu cuenta, disponible en cualquier dispositivo."
           actionLabel="Ver guía de conexión"
           actionHref="/configuracion"
         />

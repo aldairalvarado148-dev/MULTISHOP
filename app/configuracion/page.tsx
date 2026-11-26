@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { hasDataAccess, isSupabaseConfigured, missingEnv } from "@/lib/env";
+import { isSupabaseConfigured, missingEnv } from "@/lib/env";
 import { isSchemaReady } from "@/lib/schema-status";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,6 @@ type Status = {
 
 export default async function ConfiguracionPage() {
   const configured = isSupabaseConfigured();
-  const serviceRole = hasDataAccess();
   const schemaReady = configured ? await isSchemaReady() : false;
   const missing = missingEnv();
 
@@ -26,25 +25,25 @@ export default async function ConfiguracionPage() {
       ok: configured,
       detail: configured
         ? "URL y clave pública detectadas. La tienda puede leer el catálogo."
-        : `Faltan: ${missing.filter((m) => m !== "SUPABASE_SERVICE_ROLE_KEY").join(", ")}`,
-    },
-    {
-      label: "Clave de servicio (servidor)",
-      ok: serviceRole,
-      detail: serviceRole
-        ? "Detectada. Pedidos, panel administrador, imágenes y copias de seguridad operativos."
-        : "Falta SUPABASE_SERVICE_ROLE_KEY. Sin ella no se pueden crear pedidos ni guardar cambios del panel.",
+        : `Faltan: ${missing.join(", ")}`,
     },
     {
       label: "Esquema de la base de datos",
       ok: schemaReady,
       detail: schemaReady
-        ? "Tablas, políticas RLS y categorías iniciales aplicadas."
+        ? "Tablas, políticas RLS, funciones de compra y categorías iniciales aplicadas."
         : "Pendiente: ejecuta supabase/schema.sql en el SQL Editor de Supabase.",
+    },
+    {
+      label: "Escrituras, pedidos y panel administrador",
+      ok: schemaReady,
+      detail: schemaReady
+        ? "Operan con la sesión del usuario y las políticas RLS de Supabase."
+        : "Se habilitan al aplicar el esquema; no hace falta ninguna clave privada.",
     },
   ];
 
-  const ready = configured && serviceRole && schemaReady;
+  const ready = configured && schemaReady;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
@@ -101,17 +100,7 @@ export default async function ConfiguracionPage() {
               </p>
             </li>
             <li>
-              <p className="font-semibold text-white">2. Añadir la clave de servicio</p>
-              <p className="mt-1 text-[#a291bd]">
-                Supabase → <strong>Project Settings</strong> → <strong>API</strong> → copia la clave{" "}
-                <code className="text-[#e0b3ff]">service_role</code> y guárdala en AppJet, en{" "}
-                <strong>Settings → Environment variables</strong>, con el nombre{" "}
-                <code className="text-[#e0b3ff]">SUPABASE_SERVICE_ROLE_KEY</code>. Se usa solo en el
-                servidor: nunca se envía al navegador.
-              </p>
-            </li>
-            <li>
-              <p className="font-semibold text-white">3. Crear tu cuenta y nombrarla administradora</p>
+              <p className="font-semibold text-white">2. Crear tu cuenta y nombrarla administradora</p>
               <p className="mt-1 text-[#a291bd]">
                 Regístrate en <Link href="/registro" className="text-[#c77dff] underline">/registro</Link>{" "}
                 y luego ejecuta en el SQL Editor, con tu correo:
@@ -127,7 +116,8 @@ where id = (select id from auth.users where email = 'tu-correo@ejemplo.com');`}
       )}
 
       <p className="mt-8 text-xs text-[#7c6b93]">
-        Las claves privadas nunca se muestran en esta página ni se guardan en el navegador.
+        MULTISHOP no usa claves privadas: cada operación se ejecuta con tu sesión y las políticas
+        RLS de Supabase. La clave pública nunca permite saltarse permisos.
       </p>
     </div>
   );

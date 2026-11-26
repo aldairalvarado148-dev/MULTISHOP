@@ -64,7 +64,7 @@ export default async function AdminBackupsPage() {
 
       {!hasDataAccess() && (
         <p className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-          Falta SUPABASE_SERVICE_ROLE_KEY en el servidor: crear, restaurar y eliminar copias quedará deshabilitado.
+          Supabase no está configurado: crear, restaurar y eliminar copias quedará deshabilitado.
         </p>
       )}
 
