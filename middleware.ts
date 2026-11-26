@@ -11,8 +11,9 @@ let cached: { enabled: boolean; at: number } | null = null;
 const TTL = 15000;
 
 async function isMaintenanceEnabled(): Promise<boolean> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim();
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || process.env.SUPABASE_ANON_KEY?.trim();
   if (!url || !key) return false;
   if (cached && Date.now() - cached.at < TTL) return cached.enabled;
 
