@@ -246,6 +246,30 @@ create table if not exists public.support_tickets (
 );
 
 -- ------------------------------------------------------------
+-- 11b. SOLICITUDES DE RECARGA DE SALDO
+-- ------------------------------------------------------------
+create table if not exists public.wallet_topups (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  amount numeric(12,2) not null check (amount > 0),
+  method text not null default 'transferencia',
+  reference text,
+  proof_url text,
+  status text not null default 'pendiente'
+    check (status in ('pendiente','aprobado','rechazado')),
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  reviewed_at timestamptz,
+  review_notes text,
+  created_at timestamptz not null default now()
+);
+create index if not exists wallet_topups_user_idx on public.wallet_topups(user_id, created_at desc);
+
+alter table public.wallet_topups enable row level security;
+drop policy if exists wallet_topups_own on public.wallet_topups;
+create policy wallet_topups_own on public.wallet_topups for select
+  using (auth.uid() = user_id or public.is_admin());
+
+-- ------------------------------------------------------------
 -- 12. REGISTRO DE ACTIVIDADES
 -- ------------------------------------------------------------
 create table if not exists public.admin_logs (
