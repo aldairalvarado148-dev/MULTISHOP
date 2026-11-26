@@ -486,3 +486,282 @@ insert into public.settings (key, value) values
   ('store', '{"name":"MULTISHOP","tagline":"Tienda digital premium","currency":"USD","whatsapp":"","support_email":"","payment_instructions":"Realiza el pago y envía el comprobante desde el detalle de tu pedido."}'::jsonb),
   ('maintenance', '{"enabled":false,"message":"Estamos realizando mejoras para brindarte una mejor experiencia.","image_url":"","estimated_date":""}'::jsonb)
 on conflict (key) do nothing;
+
+-- ============================================================
+-- 18. CHECKOUT ATÓMICO Y ESCRITURA CON SESIÓN DE USUARIO
+-- La aplicación no usa ninguna clave privada: cada operación se
+-- ejecuta con el JWT del usuario y estas políticas/funciones.
+-- ============================================================
+
+-- Número de pedido legible y único.
+create or replace function public.next_order_number()
+returns text language plpgsql as $$
+begin
+  return 'MS-' || to_char(now(), 'YYMMDD') || '-' ||
+         upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 6));
+end; $$;
+
+-- Compra completa, atómica y a prueba de manipulación desde el navegador.
+create or replace function public.create_order_from_cart(
+  p_payment_method text default 'transferencia',
+  p_contact text default null,
+  p_notes text default null,
+  p_idempotency text default null
+)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_uid uuid := auth.uid();
+  v_profile public.profiles%rowtype;
+  v_cart_id uuid;
+  v_subtotal numeric(12,2) := 0;
+  v_balance numeric(12,2);
+  v_order public.orders%rowtype;
+  v_item record;
+  v_delivery text := 'manual';
+  v_method text := case when p_payment_method = 'saldo' then 'saldo' else 'transferencia' end;
+begin
+  if v_uid is null then raise exception 'AUTH_REQUIRED'; end if;
+
+  select * into v_profile from public.profiles where id = v_uid;
+  if not found then raise exception 'PROFILE_NOT_FOUND'; end if;
+  if v_profile.is_blocked then raise exception 'ACCOUNT_BLOCKED'; end if;
+
+  if p_idempotency is not null then
+    select * into v_order from public.orders
+      where idempotency_key = p_idempotency and user_id = v_uid;
+    if found then
+      return jsonb_build_object('orderId', v_order.id, 'orderNumber', v_order.order_number, 'duplicated', true);
+    end if;
+  end if;
+
+  select id into v_cart_id from public.carts where user_id = v_uid;
+  if v_cart_id is null then raise exception 'EMPTY_CART'; end if;
+
+  for v_item in
+    select ci.product_id, ci.quantity, p.price, p.stock, p.is_active, p.name, p.delivery_type
+    from public.cart_items ci
+    join public.products p on p.id = ci.product_id
+    where ci.cart_id = v_cart_id
+  loop
+    if not v_item.is_active then raise exception 'PRODUCT_UNAVAILABLE:%', v_item.name; end if;
+    if v_item.stock < v_item.quantity then raise exception 'INSUFFICIENT_STOCK:%', v_item.name; end if;
+    v_subtotal := v_subtotal + (v_item.price * v_item.quantity);
+    if v_item.delivery_type = 'automatic' then v_delivery := 'automatic'; end if;
+  end loop;
+
+  if v_subtotal <= 0 then raise exception 'EMPTY_CART'; end if;
+
+  if v_method = 'saldo' then
+    select balance into v_balance from public.profiles where id = v_uid for update;
+    if coalesce(v_balance, 0) < v_subtotal then raise exception 'INSUFFICIENT_BALANCE'; end if;
+  end if;
+
+  insert into public.orders (
+    order_number, user_id, customer_email, customer_name, subtotal, discount, total,
+    status, payment_status, payment_method, delivery_type, contact, customer_notes,
+    idempotency_key, paid_at
+  ) values (
+    public.next_order_number(), v_uid, v_profile.email, v_profile.full_name,
+    v_subtotal, 0, v_subtotal,
+    case when v_method = 'saldo' then 'pagado' else 'pendiente' end,
+    case when v_method = 'saldo' then 'aprobado' else 'pendiente' end,
+    v_method, v_delivery, p_contact, p_notes, p_idempotency,
+    case when v_method = 'saldo' then now() else null end
+  ) returning * into v_order;
+
+  insert into public.order_items (
+    order_id, product_id, product_name, product_image, unit_price, quantity, subtotal, delivery_type
+  )
+  select v_order.id, ci.product_id, p.name, p.image_url, p.price, ci.quantity,
+         (p.price * ci.quantity), p.delivery_type
+  from public.cart_items ci
+  join public.products p on p.id = ci.product_id
+  where ci.cart_id = v_cart_id;
+
+  update public.products p
+    set stock = greatest(p.stock - ci.quantity, 0)
+    from public.cart_items ci
+    where ci.cart_id = v_cart_id and p.id = ci.product_id;
+
+  if v_method = 'saldo' then
+    update public.profiles set balance = balance - v_subtotal
+      where id = v_uid returning balance into v_balance;
+
+    insert into public.wallet_transactions (user_id, type, amount, balance_after, description, order_id)
+    values (v_uid, 'debito', v_subtotal, v_balance, 'Compra ' || v_order.order_number, v_order.id);
+  end if;
+
+  insert into public.payments (order_id, user_id, amount, method, status, reviewed_at, review_notes)
+  values (
+    v_order.id, v_uid, v_subtotal, v_method,
+    case when v_method = 'saldo' then 'aprobado' else 'pendiente' end,
+    case when v_method = 'saldo' then now() else null end,
+    case when v_method = 'saldo' then 'Pago automático con saldo' else null end
+  );
+
+  insert into public.notifications (user_id, title, body, type, link)
+  values (
+    v_uid,
+    'Pedido ' || v_order.order_number || ' creado',
+    case when v_method = 'saldo'
+      then 'Tu pago con saldo fue aprobado. Estamos preparando tu entrega.'
+      else 'Envía tu comprobante para verificar el pago y procesar tu pedido.' end,
+    'pedido', '/compras/' || v_order.id
+  );
+
+  delete from public.cart_items where cart_id = v_cart_id;
+
+  return jsonb_build_object('orderId', v_order.id, 'orderNumber', v_order.order_number);
+end; $$;
+
+revoke all on function public.create_order_from_cart(text, text, text, text) from public;
+grant execute on function public.create_order_from_cart(text, text, text, text) to authenticated;
+
+-- ------------------------------------------------------------
+-- 18b. PROTECCIONES: el cliente no puede alterar precios, saldo ni roles
+-- ------------------------------------------------------------
+create or replace function public.profiles_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.is_admin() then return new; end if;
+  new.role := old.role;
+  new.balance := old.balance;
+  new.is_blocked := old.is_blocked;
+  new.notes := old.notes;
+  new.email := old.email;
+  new.updated_at := now();
+  return new;
+end; $$;
+
+drop trigger if exists profiles_guard on public.profiles;
+create trigger profiles_guard before update on public.profiles
+  for each row execute function public.profiles_guard();
+
+create or replace function public.orders_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.is_admin() then return new; end if;
+  if new.status <> 'cancelado' then new.status := old.status; end if;
+  new.payment_status := old.payment_status;
+  new.subtotal := old.subtotal;
+  new.discount := old.discount;
+  new.total := old.total;
+  new.user_id := old.user_id;
+  new.order_number := old.order_number;
+  new.payment_method := old.payment_method;
+  new.idempotency_key := old.idempotency_key;
+  new.admin_notes := old.admin_notes;
+  new.delivered_at := old.delivered_at;
+  new.paid_at := old.paid_at;
+  new.delivery_type := old.delivery_type;
+  return new;
+end; $$;
+
+drop trigger if exists orders_guard on public.orders;
+create trigger orders_guard before update on public.orders
+  for each row execute function public.orders_guard();
+
+create or replace function public.payments_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.is_admin() then return new; end if;
+  new.amount := old.amount;
+  new.order_id := old.order_id;
+  new.user_id := old.user_id;
+  new.method := old.method;
+  new.reviewed_by := old.reviewed_by;
+  new.reviewed_at := old.reviewed_at;
+  new.review_notes := old.review_notes;
+  if old.status = 'aprobado' or old.status = 'rechazado' then
+    new.status := old.status;
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists payments_guard on public.payments;
+create trigger payments_guard before update on public.payments
+  for each row execute function public.payments_guard();
+
+create or replace function public.wallet_topups_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.is_admin() then return new; end if;
+  new.user_id := auth.uid();
+  new.status := 'pendiente';
+  new.reviewed_by := null;
+  new.reviewed_at := null;
+  new.review_notes := null;
+  return new;
+end; $$;
+
+drop trigger if exists wallet_topups_guard on public.wallet_topups;
+create trigger wallet_topups_guard before insert on public.wallet_topups
+  for each row execute function public.wallet_topups_guard();
+
+create or replace function public.support_tickets_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.is_admin() then return new; end if;
+  new.user_id := auth.uid();
+  new.status := 'abierto';
+  new.admin_reply := null;
+  new.replied_at := null;
+  return new;
+end; $$;
+
+drop trigger if exists support_tickets_guard on public.support_tickets;
+create trigger support_tickets_guard before insert on public.support_tickets
+  for each row execute function public.support_tickets_guard();
+
+-- ------------------------------------------------------------
+-- 18c. POLÍTICAS DE ESCRITURA
+-- ------------------------------------------------------------
+-- Administradores: control total sobre las tablas de gestión.
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'profiles','categories','subcategories','products','banners','carts','cart_items',
+    'orders','order_items','payments','wallet_transactions','wallet_topups','settings',
+    'notifications','support_tickets','admin_logs','backups','backup_events'
+  ]
+  loop
+    execute format('drop policy if exists %I on public.%I', t || '_admin_all', t);
+    execute format(
+      'create policy %I on public.%I for all to authenticated using (public.is_admin()) with check (public.is_admin())',
+      t || '_admin_all', t
+    );
+  end loop;
+end $$;
+
+-- Cliente: crear su solicitud de recarga, su ticket y marcar notificaciones.
+drop policy if exists wallet_topups_insert_own on public.wallet_topups;
+create policy wallet_topups_insert_own on public.wallet_topups for insert to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists support_insert_own on public.support_tickets;
+create policy support_insert_own on public.support_tickets for insert to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists notifications_update_own on public.notifications;
+create policy notifications_update_own on public.notifications for update to authenticated
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Cliente: adjuntar comprobante a su pago y cancelar su propio pedido.
+drop policy if exists payments_update_own on public.payments;
+create policy payments_update_own on public.payments for update to authenticated
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists orders_update_own on public.orders;
+create policy orders_update_own on public.orders for update to authenticated
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Storage: el administrador publica imágenes; el cliente sube sus comprobantes.
+drop policy if exists media_admin_write on storage.objects;
+create policy media_admin_write on storage.objects for all to authenticated
+  using (bucket_id = 'media' and public.is_admin())
+  with check (bucket_id = 'media' and public.is_admin());
+
+drop policy if exists comprobantes_owner_insert on storage.objects;
+create policy comprobantes_owner_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'comprobantes' and owner = auth.uid());
