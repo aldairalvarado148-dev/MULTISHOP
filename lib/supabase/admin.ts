@@ -1,24 +1,25 @@
 import "server-only";
-import { createClient } from "@supabase/supabase-js";
-import { supabaseEnv } from "@/lib/env";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/env";
 
 /**
- * Cliente administrativo con service role.
+ * Cliente de datos del servidor.
+ *
+ * Usa la sesión del usuario autenticado (cookies) y las políticas RLS de
+ * Supabase, por lo que NO requiere ninguna clave privada ni service role.
+ * Los permisos de administrador se resuelven en la base de datos con
+ * public.is_admin().
+ *
  * SOLO se importa en código de servidor (API routes / server components).
- * Nunca debe llegar al navegador.
  */
-export function await createSupabaseAdminClient() {
-  const env = supabaseEnv();
-  if (!env?.serviceKey) {
-    throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY no está configurada en el servidor.",
-    );
+export async function createSupabaseAdminClient() {
+  const client = await createSupabaseServerClient();
+  if (!client) {
+    throw new Error("Supabase no está configurado en el servidor.");
   }
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return client;
 }
 
 export function hasDataAccess(): boolean {
-  return Boolean(supabaseEnv()?.serviceKey);
+  return isSupabaseConfigured();
 }

@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hasDataAccess } from "@/lib/env";
-import { clearCart, loadCart } from "@/lib/cart";
 import { getMaintenanceSettings } from "@/lib/settings";
-import { orderNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+type RpcResult = {
+  orderId?: string;
+  orderNumber?: string;
+  duplicated?: boolean;
+};
+
+/**
+ * Crea el pedido desde el carrito del usuario.
+ *
+ * Toda la operación (validación de stock, precios reales, descuento de stock,
+ * cobro con saldo, movimiento de cartera, pago, notificación y vaciado del
+ * carrito) ocurre dentro de la función `create_order_from_cart` de Postgres,
+ * de forma atómica y a prueba de manipulación desde el navegador.
+ */
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -15,7 +26,7 @@ export async function POST(request: Request) {
   }
   if (!hasDataAccess()) {
     return NextResponse.json(
-      { error: "Falta SUPABASE_SERVICE_ROLE_KEY en el servidor." },
+      { error: "La tienda aún no está instalada en Supabase." },
       { status: 503 },
     );
   }
@@ -44,180 +55,69 @@ export async function POST(request: Request) {
   const method = body.paymentMethod === "saldo" ? "saldo" : "transferencia";
   const idempotencyKey = body.idempotencyKey?.slice(0, 120) || null;
 
-  const admin = await createSupabaseAdminClient();
+  const { data, error } = await supabase.rpc("create_order_from_cart", {
+    p_payment_method: method,
+    p_contact: body.contact?.slice(0, 200) || null,
+    p_notes: body.notes?.slice(0, 1000) || null,
+    p_idempotency: idempotencyKey,
+  });
 
-  // Evita pedidos duplicados si el usuario reintenta el mismo checkout.
-  if (idempotencyKey) {
-    const { data: existing } = await admin
-      .from("orders")
-      .select("id")
-      .eq("idempotency_key", idempotencyKey)
-      .maybeSingle();
-    if (existing?.id) {
-      return NextResponse.json({ orderId: existing.id, duplicated: true });
+  if (error) {
+    const message = error.message ?? "";
+
+    if (message.includes("EMPTY_CART")) {
+      return NextResponse.json({ error: "Tu carrito está vacío." }, { status: 400 });
     }
-  }
-
-  const cart = await loadCart(user.id);
-  if (cart.items.length === 0) {
-    return NextResponse.json({ error: "Tu carrito está vacío." }, { status: 400 });
-  }
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, email, full_name, balance, is_blocked, role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!profile) {
-    return NextResponse.json({ error: "Perfil no encontrado." }, { status: 404 });
-  }
-  if (profile.is_blocked) {
-    return NextResponse.json({ error: "Tu cuenta está bloqueada." }, { status: 403 });
-  }
-
-  // Validación de stock y disponibilidad real.
-  for (const item of cart.items) {
-    if (!item.product.is_active) {
+    if (message.includes("INSUFFICIENT_BALANCE")) {
+      return NextResponse.json({ error: "Saldo insuficiente." }, { status: 402 });
+    }
+    if (message.includes("ACCOUNT_BLOCKED")) {
+      return NextResponse.json({ error: "Tu cuenta está bloqueada." }, { status: 403 });
+    }
+    if (message.includes("PROFILE_NOT_FOUND")) {
+      return NextResponse.json({ error: "Perfil no encontrado." }, { status: 404 });
+    }
+    if (message.includes("INSUFFICIENT_STOCK:")) {
+      const name = message.split("INSUFFICIENT_STOCK:")[1]?.trim() ?? "";
       return NextResponse.json(
-        { error: `El producto "${item.product.name}" ya no está disponible.` },
+        { error: `Stock insuficiente para "${name}".` },
         { status: 409 },
       );
     }
-    if (item.product.stock < item.quantity) {
+    if (message.includes("PRODUCT_UNAVAILABLE:")) {
+      const name = message.split("PRODUCT_UNAVAILABLE:")[1]?.trim() ?? "";
       return NextResponse.json(
-        { error: `Stock insuficiente para "${item.product.name}".` },
+        { error: `El producto "${name}" ya no está disponible.` },
         { status: 409 },
       );
     }
-  }
-
-  const subtotal = cart.subtotal;
-  const total = subtotal;
-  const balance = Number(profile.balance ?? 0);
-
-  if (method === "saldo" && balance < total) {
-    return NextResponse.json({ error: "Saldo insuficiente." }, { status: 402 });
-  }
-
-  const deliveryType = cart.items.some((i) => i.product.delivery_type === "automatic")
-    ? "automatic"
-    : "manual";
-
-  const { data: order, error: orderError } = await admin
-    .from("orders")
-    .insert({
-      order_number: orderNumber(),
-      user_id: user.id,
-      customer_email: profile.email ?? user.email,
-      customer_name: profile.full_name,
-      subtotal,
-      discount: 0,
-      total,
-      status: method === "saldo" ? "pagado" : "pendiente",
-      payment_status: method === "saldo" ? "aprobado" : "pendiente",
-      payment_method: method,
-      delivery_type: deliveryType,
-      contact: body.contact?.slice(0, 200) || null,
-      customer_notes: body.notes?.slice(0, 1000) || null,
-      idempotency_key: idempotencyKey,
-      paid_at: method === "saldo" ? new Date().toISOString() : null,
-    })
-    .select("id, order_number, total")
-    .single();
-
-  if (orderError || !order) {
-    if (orderError?.code === "23505") {
-      const { data: existing } = await admin
+    if (error.code === "23505" && idempotencyKey) {
+      const { data: existing } = await supabase
         .from("orders")
         .select("id")
-        .eq("idempotency_key", idempotencyKey ?? "")
+        .eq("idempotency_key", idempotencyKey)
         .maybeSingle();
-      if (existing?.id) return NextResponse.json({ orderId: existing.id, duplicated: true });
+      if (existing?.id) {
+        return NextResponse.json({ orderId: existing.id, duplicated: true });
+      }
     }
+    if (error.code === "42883") {
+      return NextResponse.json(
+        { error: "Falta aplicar el esquema de Supabase (supabase/schema.sql)." },
+        { status: 503 },
+      );
+    }
+
     return NextResponse.json(
-      { error: orderError?.message ?? "No se pudo crear el pedido." },
+      { error: message || "No se pudo crear el pedido." },
       { status: 500 },
     );
   }
 
-  const itemRows = cart.items.map((item) => ({
-    order_id: order.id,
-    product_id: item.product_id,
-    product_name: item.product.name,
-    product_image: item.product.image_url,
-    unit_price: item.product.price,
-    quantity: item.quantity,
-    subtotal: Number(item.product.price) * item.quantity,
-    delivery_type: item.product.delivery_type,
-  }));
-
-  const { error: itemsError } = await admin.from("order_items").insert(itemRows);
-  if (itemsError) {
-    await admin.from("orders").delete().eq("id", order.id);
-    return NextResponse.json({ error: itemsError.message }, { status: 500 });
+  const result = (data ?? {}) as RpcResult;
+  if (!result.orderId) {
+    return NextResponse.json({ error: "No se pudo crear el pedido." }, { status: 500 });
   }
 
-  // Descuento de stock (evita sobreventa).
-  for (const item of cart.items) {
-    await admin
-      .from("products")
-      .update({ stock: Math.max(0, Number(item.product.stock) - item.quantity) })
-      .eq("id", item.product_id);
-  }
-
-  // Cobro con saldo: descuenta y registra el movimiento.
-  if (method === "saldo") {
-    const newBalance = Math.round((balance - total) * 100) / 100;
-    const { error: balanceError } = await admin
-      .from("profiles")
-      .update({ balance: newBalance })
-      .eq("id", user.id);
-
-    if (balanceError) {
-      return NextResponse.json({ error: balanceError.message }, { status: 500 });
-    }
-
-    await admin.from("wallet_transactions").insert({
-      user_id: user.id,
-      type: "debito",
-      amount: total,
-      balance_after: newBalance,
-      description: `Compra ${order.order_number}`,
-      order_id: order.id,
-    });
-
-    await admin.from("payments").insert({
-      order_id: order.id,
-      user_id: user.id,
-      amount: total,
-      method: "saldo",
-      status: "aprobado",
-      reviewed_at: new Date().toISOString(),
-      review_notes: "Pago automático con saldo",
-    });
-  } else {
-    await admin.from("payments").insert({
-      order_id: order.id,
-      user_id: user.id,
-      amount: total,
-      method,
-      status: "pendiente",
-    });
-  }
-
-  await admin.from("notifications").insert({
-    user_id: user.id,
-    title: `Pedido ${order.order_number} creado`,
-    body:
-      method === "saldo"
-        ? "Tu pago con saldo fue aprobado. Estamos preparando tu entrega."
-        : "Envía tu comprobante para verificar el pago y procesar tu pedido.",
-    type: "pedido",
-    link: `/compras/${order.id}`,
-  });
-
-  await clearCart(user.id);
-
-  return NextResponse.json({ orderId: order.id, orderNumber: order.order_number });
+  return NextResponse.json(result);
 }
