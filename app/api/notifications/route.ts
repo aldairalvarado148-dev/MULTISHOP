@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export async function POST() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Inicia sesión." }, { status: 401 });
 
-  const client = hasServiceRole() ? createSupabaseAdminClient() : supabase;
+  const client = hasDataAccess() ? await createSupabaseAdminClient() : supabase;
   const { error } = await client
     .from("notifications")
     .update({ is_read: true })

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   const supabase = await createSupabaseServerClient();
   if (!supabase) return NextResponse.json({ error: "Supabase no está configurado." }, { status: 503 });
-  if (!hasServiceRole()) {
+  if (!hasDataAccess()) {
     return NextResponse.json({ error: "Falta SUPABASE_SERVICE_ROLE_KEY." }, { status: 503 });
   }
 
@@ -20,7 +20,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Inicia sesión." }, { status: 401 });
 
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
   const { data: order } = await admin
     .from("orders")
     .select("id, user_id, order_number, status")

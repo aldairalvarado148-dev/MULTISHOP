@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +24,8 @@ export async function PATCH(request: Request) {
     phone: (body.phone ?? "").slice(0, 40) || null,
   };
 
-  if (hasServiceRole()) {
-    const admin = createSupabaseAdminClient();
+  if (hasDataAccess()) {
+    const admin = await createSupabaseAdminClient();
     const { error } = await admin.from("profiles").update(payload).eq("id", user.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   } else {

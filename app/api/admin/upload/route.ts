@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ const ALLOWED = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/av
 export async function POST(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-  if (!hasServiceRole()) {
+  if (!hasDataAccess()) {
     return NextResponse.json({ error: "Falta SUPABASE_SERVICE_ROLE_KEY." }, { status: 503 });
   }
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Formato no permitido (PNG, JPG, WEBP, GIF, AVIF)." }, { status: 415 });
   }
 
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
   const ext = (file.name.split(".").pop() ?? "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());

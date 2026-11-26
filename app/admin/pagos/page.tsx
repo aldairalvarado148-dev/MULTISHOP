@@ -2,7 +2,7 @@ import PaymentsManager, { type PaymentRow, type TopupRow } from "@/components/ad
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import { getStoreSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export default async function AdminPaymentsPage() {
   const session = await requireAdmin();
   if (!session) return null;
 
-  const supabase = hasServiceRole() ? createSupabaseAdminClient() : await createSupabaseServerClient();
+  const supabase = hasDataAccess() ? await createSupabaseAdminClient() : await createSupabaseServerClient();
   const store = await getStoreSettings();
   if (!supabase) return <p className="card p-4 text-sm text-rose-300">Supabase no está configurado.</p>;
 

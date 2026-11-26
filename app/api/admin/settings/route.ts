@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import { DEFAULT_MAINTENANCE, DEFAULT_STORE } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function PATCH(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-  if (!hasServiceRole()) {
+  if (!hasDataAccess()) {
     return NextResponse.json({ error: "Falta SUPABASE_SERVICE_ROLE_KEY." }, { status: 503 });
   }
 
@@ -28,7 +28,7 @@ export async function PATCH(request: Request) {
   const defaults = body.key === "store" ? DEFAULT_STORE : DEFAULT_MAINTENANCE;
   const merged = { ...defaults, ...body.value };
 
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
   const { error } = await admin
     .from("settings")
     .upsert({ key: body.key, value: merged, updated_at: new Date().toISOString() }, { onConflict: "key" });

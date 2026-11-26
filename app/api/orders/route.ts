@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import { clearCart, loadCart } from "@/lib/cart";
 import { getMaintenanceSettings } from "@/lib/settings";
 import { orderNumber } from "@/lib/utils";
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   if (!supabase) {
     return NextResponse.json({ error: "Supabase no está configurado." }, { status: 503 });
   }
-  if (!hasServiceRole()) {
+  if (!hasDataAccess()) {
     return NextResponse.json(
       { error: "Falta SUPABASE_SERVICE_ROLE_KEY en el servidor." },
       { status: 503 },
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   const method = body.paymentMethod === "saldo" ? "saldo" : "transferencia";
   const idempotencyKey = body.idempotencyKey?.slice(0, 120) || null;
 
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
 
   // Evita pedidos duplicados si el usuario reintenta el mismo checkout.
   if (idempotencyKey) {

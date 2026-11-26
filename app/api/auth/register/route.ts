@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -48,9 +48,9 @@ export async function POST(request: Request) {
   }
 
   // El primer usuario registrado se convierte en administrador (arranque seguro).
-  if (data.user && hasServiceRole()) {
+  if (data.user && hasDataAccess()) {
     try {
-      const admin = createSupabaseAdminClient();
+      const admin = await createSupabaseAdminClient();
       const { count } = await admin
         .from("profiles")
         .select("id", { count: "exact", head: true })

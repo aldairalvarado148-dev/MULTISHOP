@@ -7,7 +7,7 @@ import { supabaseEnv } from "@/lib/env";
  * SOLO se importa en código de servidor (API routes / server components).
  * Nunca debe llegar al navegador.
  */
-export function createSupabaseAdminClient() {
+export function await createSupabaseAdminClient() {
   const env = supabaseEnv();
   if (!env?.serviceKey) {
     throw new Error(
@@ -19,6 +19,6 @@ export function createSupabaseAdminClient() {
   });
 }
 
-export function hasAdminClient(): boolean {
+export function hasDataAccess(): boolean {
   return Boolean(supabaseEnv()?.serviceKey);
 }

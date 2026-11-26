@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +10,12 @@ type ItemUpdate = { id: string; delivery_data?: string | null };
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-  if (!hasServiceRole()) {
+  if (!hasDataAccess()) {
     return NextResponse.json({ error: "Falta SUPABASE_SERVICE_ROLE_KEY." }, { status: 503 });
   }
 
   const { id } = await params;
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
 
   const { data: order, error: orderError } = await admin
     .from("orders")

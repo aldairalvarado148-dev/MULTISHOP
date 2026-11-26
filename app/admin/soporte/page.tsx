@@ -2,7 +2,7 @@ import SupportManager, { type TicketRow } from "@/components/admin/SupportManage
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import type { SupportTicket } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export default async function AdminSupportPage() {
   const session = await requireAdmin();
   if (!session) return null;
 
-  const supabase = hasServiceRole() ? createSupabaseAdminClient() : await createSupabaseServerClient();
+  const supabase = hasDataAccess() ? await createSupabaseAdminClient() : await createSupabaseServerClient();
   if (!supabase) return <p className="card p-4 text-sm text-rose-300">Supabase no está configurado.</p>;
 
   const [{ data: tickets }, { data: profiles }, { data: orders }] = await Promise.all([

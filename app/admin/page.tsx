@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import { formatDate, formatMoney } from "@/lib/utils";
 import { getStoreSettings } from "@/lib/settings";
 import type { Order } from "@/lib/types";
@@ -13,7 +13,7 @@ export default async function AdminDashboard() {
   const session = await requireAdmin();
   if (!session) return null;
 
-  const supabase = hasServiceRole() ? createSupabaseAdminClient() : await createSupabaseServerClient();
+  const supabase = hasDataAccess() ? await createSupabaseAdminClient() : await createSupabaseServerClient();
   const store = await getStoreSettings();
   if (!supabase) {
     return <p className="card p-4 text-sm text-rose-300">Supabase no está configurado.</p>;

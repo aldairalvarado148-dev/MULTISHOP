@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import { getMaintenanceSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ const MAX_BYTES = 8 * 1024 * 1024;
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return NextResponse.json({ error: "Supabase no está configurado." }, { status: 503 });
-  if (!hasServiceRole()) {
+  if (!hasDataAccess()) {
     return NextResponse.json({ error: "Falta SUPABASE_SERVICE_ROLE_KEY." }, { status: 503 });
   }
 
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Monto inválido." }, { status: 400 });
   }
 
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
   let proofUrl: string | null = null;
 
   if (file instanceof File && file.size > 0) {

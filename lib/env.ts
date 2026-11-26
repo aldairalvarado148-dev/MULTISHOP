@@ -38,7 +38,7 @@ export function isSupabaseConfigured(): boolean {
   return supabaseEnv() !== null;
 }
 
-export function hasServiceRole(): boolean {
+export function hasDataAccess(): boolean {
   return Boolean(supabaseEnv()?.serviceKey);
 }
 

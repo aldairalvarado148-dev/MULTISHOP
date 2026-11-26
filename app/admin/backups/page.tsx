@@ -2,7 +2,7 @@ import BackupManager, { type BackupRow } from "@/components/admin/BackupManager"
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import type { BackupManifest } from "@/lib/backups";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export default async function AdminBackupsPage() {
   const session = await requireAdmin();
   if (!session) return null;
 
-  const supabase = hasServiceRole() ? createSupabaseAdminClient() : await createSupabaseServerClient();
+  const supabase = hasDataAccess() ? await createSupabaseAdminClient() : await createSupabaseServerClient();
   if (!supabase) return <p className="card p-4 text-sm text-rose-300">Supabase no está configurado.</p>;
 
   const { data } = await supabase
@@ -62,7 +62,7 @@ export default async function AdminBackupsPage() {
         automático del estado actual antes de restaurar.
       </p>
 
-      {!hasServiceRole() && (
+      {!hasDataAccess() && (
         <p className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
           Falta SUPABASE_SERVICE_ROLE_KEY en el servidor: crear, restaurar y eliminar copias quedará deshabilitado.
         </p>

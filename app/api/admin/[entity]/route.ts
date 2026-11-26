@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import { slugify } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -114,8 +114,8 @@ async function logAction(
 }
 
 function client() {
-  if (!hasServiceRole()) return null;
-  return createSupabaseAdminClient();
+  if (!hasDataAccess()) return null;
+  return await createSupabaseAdminClient();
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ entity: string }> }) {

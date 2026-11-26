@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import { formatDate } from "@/lib/utils";
 import type { AdminLog } from "@/lib/types";
 
@@ -21,7 +21,7 @@ export default async function AdminActivityPage() {
   const session = await requireAdmin();
   if (!session) return null;
 
-  const supabase = hasServiceRole() ? createSupabaseAdminClient() : await createSupabaseServerClient();
+  const supabase = hasDataAccess() ? await createSupabaseAdminClient() : await createSupabaseServerClient();
   if (!supabase) return <p className="card p-4 text-sm text-rose-300">Supabase no está configurado.</p>;
 
   const [{ data: logs }, { data: events }] = await Promise.all([

@@ -2,7 +2,7 @@ import OrdersManager from "@/components/admin/OrdersManager";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import { getStoreSettings } from "@/lib/settings";
 import type { Order, OrderItem } from "@/lib/types";
 
@@ -17,7 +17,7 @@ export default async function AdminOrdersPage({
   if (!session) return null;
   const { focus } = await searchParams;
 
-  const supabase = hasServiceRole() ? createSupabaseAdminClient() : await createSupabaseServerClient();
+  const supabase = hasDataAccess() ? await createSupabaseAdminClient() : await createSupabaseServerClient();
   const store = await getStoreSettings();
   if (!supabase) return <p className="card p-4 text-sm text-rose-300">Supabase no está configurado.</p>;
 

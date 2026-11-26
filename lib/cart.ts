@@ -5,7 +5,7 @@ import type { CartItem, Product } from "@/lib/types";
 export type CartPayload = { items: CartItem[]; subtotal: number };
 
 export async function loadCart(userId: string): Promise<CartPayload> {
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
 
   const { data: cart } = await admin
     .from("carts")
@@ -44,7 +44,7 @@ export async function loadCart(userId: string): Promise<CartPayload> {
 }
 
 export async function clearCart(userId: string): Promise<void> {
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
   const { data: cart } = await admin
     .from("carts")
     .select("id")

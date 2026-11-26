@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import type { CartItem, Product } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 async function resolveCartId(userId: string): Promise<string | null> {
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
   const { data: existing } = await admin
     .from("carts")
     .select("id")
@@ -25,7 +25,7 @@ async function resolveCartId(userId: string): Promise<string | null> {
 }
 
 async function loadCart(userId: string) {
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
   const { data: cart } = await admin
     .from("carts")
     .select("id")
@@ -70,7 +70,7 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ items: [], subtotal: 0, authenticated: false });
-  if (!hasServiceRole()) {
+  if (!hasDataAccess()) {
     return NextResponse.json(
       { error: "Falta SUPABASE_SERVICE_ROLE_KEY en el servidor." },
       { status: 503 },
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Inicia sesión para comprar." }, { status: 401 });
 
-  if (!hasServiceRole()) {
+  if (!hasDataAccess()) {
     return NextResponse.json(
       { error: "Falta SUPABASE_SERVICE_ROLE_KEY en el servidor." },
       { status: 503 },
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
   }
   const quantity = Math.min(Math.max(Number(body.quantity ?? 1), 1), 99);
 
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
   const { data: product } = await admin
     .from("products")
     .select("id, is_active, stock")
@@ -167,7 +167,7 @@ export async function PATCH(request: Request) {
   };
   if (!body.itemId) return NextResponse.json({ error: "Ítem inválido." }, { status: 400 });
 
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
   const quantity = Math.min(Math.max(Number(body.quantity ?? 1), 0), 99);
 
   const { data: item } = await admin
@@ -204,7 +204,7 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const itemId = searchParams.get("itemId");
   const clear = searchParams.get("clear") === "1";
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
 
   const { data: cart } = await admin
     .from("carts")

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { hasServiceRole, isSupabaseConfigured, missingEnv } from "@/lib/env";
+import { hasDataAccess, isSupabaseConfigured, missingEnv } from "@/lib/env";
 import { isSchemaReady } from "@/lib/schema-status";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ type Status = {
 
 export default async function ConfiguracionPage() {
   const configured = isSupabaseConfigured();
-  const serviceRole = hasServiceRole();
+  const serviceRole = hasDataAccess();
   const schemaReady = configured ? await isSchemaReady() : false;
   const missing = missingEnv();
 

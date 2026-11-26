@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import { collectBackup } from "@/lib/backups";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-  if (!hasServiceRole()) {
+  if (!hasDataAccess()) {
     return NextResponse.json(
       { error: "Las copias requieren SUPABASE_SERVICE_ROLE_KEY configurada en el servidor." },
       { status: 503 },
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json().catch(() => ({}))) as { name?: string };
-  const admin = createSupabaseAdminClient();
+  const admin = await createSupabaseAdminClient();
   const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
   const name = (body.name?.trim() || `Copia ${stamp}`).slice(0, 120);
 

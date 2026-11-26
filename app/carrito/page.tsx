@@ -3,7 +3,7 @@ import EmptyState from "@/components/EmptyState";
 import CartView from "@/components/cart/CartView";
 import { getSession } from "@/lib/auth";
 import { loadCart } from "@/lib/cart";
-import { hasServiceRole } from "@/lib/env";
+import { hasDataAccess } from "@/lib/env";
 import { getStoreSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export default async function CartPage() {
     );
   }
 
-  if (!hasServiceRole()) {
+  if (!hasDataAccess()) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-10">
         <EmptyState
