@@ -72,7 +72,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ items: [], subtotal: 0, authenticated: false });
   if (!hasDataAccess()) {
     return NextResponse.json(
-      { error: "Falta SUPABASE_SERVICE_ROLE_KEY en el servidor." },
+      { error: "La tienda aún no está configurada en Supabase." },
       { status: 503 },
     );
   }
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
 
   if (!hasDataAccess()) {
     return NextResponse.json(
-      { error: "Falta SUPABASE_SERVICE_ROLE_KEY en el servidor." },
+      { error: "La tienda aún no está configurada en Supabase." },
       { status: 503 },
     );
   }

@@ -9,7 +9,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   if (!hasDataAccess()) {
-    return NextResponse.json({ error: "Falta SUPABASE_SERVICE_ROLE_KEY." }, { status: 503 });
+    return NextResponse.json({ error: "La tienda aún no está configurada en Supabase." }, { status: 503 });
   }
 
   const { id } = await params;

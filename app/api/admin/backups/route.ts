@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   if (!hasDataAccess()) {
     return NextResponse.json(
-      { error: "Las copias requieren SUPABASE_SERVICE_ROLE_KEY configurada en el servidor." },
+      { error: "Las copias requieren que Supabase esté configurado." },
       { status: 503 },
     );
   }

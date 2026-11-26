@@ -122,7 +122,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ent
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   const admin = client();
-  if (!admin) return NextResponse.json({ error: "Falta SUPABASE_SERVICE_ROLE_KEY." }, { status: 503 });
+  if (!admin) return NextResponse.json({ error: "La tienda aún no está configurada en Supabase." }, { status: 503 });
 
   const { entity } = await params;
   const config = ENTITIES[entity];
@@ -159,7 +159,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ en
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   const admin = client();
-  if (!admin) return NextResponse.json({ error: "Falta SUPABASE_SERVICE_ROLE_KEY." }, { status: 503 });
+  if (!admin) return NextResponse.json({ error: "La tienda aún no está configurada en Supabase." }, { status: 503 });
 
   const { entity } = await params;
   const config = ENTITIES[entity];
@@ -195,7 +195,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ e
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   const admin = client();
-  if (!admin) return NextResponse.json({ error: "Falta SUPABASE_SERVICE_ROLE_KEY." }, { status: 503 });
+  if (!admin) return NextResponse.json({ error: "La tienda aún no está configurada en Supabase." }, { status: 503 });
 
   const { entity } = await params;
   const config = ENTITIES[entity];
