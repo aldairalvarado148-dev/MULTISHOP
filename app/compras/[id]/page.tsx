@@ -4,6 +4,7 @@ import ProofUpload from "@/components/orders/ProofUpload";
 import { getSession } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getStoreSettings } from "@/lib/settings";
+import { resolveProofLink } from "@/lib/storage";
 import { formatDate, formatMoney } from "@/lib/utils";
 import type { Order, OrderItem, Payment } from "@/lib/types";
 
@@ -71,6 +72,8 @@ export default async function OrderDetailPage({
   const orderItems = (items as OrderItem[] | null) ?? [];
   const payment = ((payments as Payment[] | null) ?? [])[0] ?? null;
   const needsProof = o.payment_method !== "saldo" && o.payment_status !== "aprobado";
+  // El comprobante está en un bucket privado: se firma un enlace temporal.
+  const proofLink = await resolveProofLink(payment?.proof_url ?? null);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
@@ -185,7 +188,7 @@ export default async function OrderDetailPage({
             <ProofUpload
               orderId={o.id}
               hasProof={Boolean(payment?.proof_url)}
-              proofUrl={payment?.proof_url ?? null}
+              proofUrl={proofLink}
             />
           )}
 
