@@ -78,7 +78,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             >
               {available ? `Disponible · ${product.stock}` : "Agotado"}
             </span>
-            {product.delivery_type === "automatica" && (
+            {product.delivery_type === "automatic" && (
               <span className="badge">⚡ Entrega automática</span>
             )}
           </div>
@@ -116,7 +116,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <ul className="mt-6 space-y-2 text-xs text-[#a291bd]">
             <li>✅ Pago verificado antes de confirmar el pedido</li>
             <li>
-              {product.delivery_type === "automatica"
+              {product.delivery_type === "automatic"
                 ? "⚡ Entrega automática al aprobarse el pago"
                 : "🧑‍💻 Entrega manual por el equipo de soporte"}
             </li>

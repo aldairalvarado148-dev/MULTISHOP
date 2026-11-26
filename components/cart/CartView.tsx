@@ -156,7 +156,7 @@ export default function CartView({ initialItems, currency, balance, paymentInstr
                       {item.product.name}
                     </Link>
                     <p className="mt-0.5 text-xs text-[#8f7aab]">
-                      {formatMoney(price, currency)} · {item.product.delivery_type === "automatica" ? "⚡ automática" : "manual"}
+                      {formatMoney(price, currency)} · {item.product.delivery_type === "automatic" ? "⚡ automática" : "manual"}
                     </p>
                   </div>
                   <button
