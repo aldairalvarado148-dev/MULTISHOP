@@ -6,8 +6,8 @@ Diseño premium negro / morado neón / violeta, responsive y con panel administr
 ## Estado del proyecto
 
 El código está completo y compila (`npm run build`, 51 rutas). Para que la tienda
-funcione de verdad contra tu base de datos faltan **dos pasos de instalación** que
-solo se pueden hacer desde tus cuentas:
+funcione de verdad contra tu base de datos falta **un solo paso de instalación** que
+solo se puede hacer desde tu cuenta de Supabase:
 
 ### 1. Aplicar el esquema de la base de datos
 
@@ -21,7 +21,7 @@ El script es idempotente (se puede ejecutar varias veces sin perder datos). Crea
   detalles, pagos, saldos, movimientos, notificaciones, soporte, configuración,
   banners, copias de seguridad, eventos, registros administrativos).
 - Políticas **RLS** en las 18 tablas, triggers de perfil automático y funciones de apoyo.
-- Buckets de Storage para imágenes (`media`) y comprobantes (`receipts`).
+- Buckets de Storage para imágenes (`media`) y comprobantes (`comprobantes`).
 - Las **dos categorías iniciales**: FREE FIRE y STREAMING, con sus subcategorías
   (Diamantes, Pases, Membresías, Cuentas FF, Otros · Netflix, YouTube Premium,
   Spotify, Otros servicios).
@@ -29,22 +29,24 @@ El script es idempotente (se puede ejecutar varias veces sin perder datos). Crea
 Sin este paso la tienda muestra el aviso "Configuración pendiente" y el catálogo
 aparece vacío (`PGRST205: Could not find the table 'public.categories'`).
 
-### 2. Añadir la clave de servicio (solo servidor)
+### 2. Variables de entorno
 
-En **AppJet → Settings → Environment variables** crea:
+La tienda solo necesita las credenciales **públicas** de Supabase (ya configuradas
+en AppJet → Settings → Environment variables):
 
 | Variable | Dónde se obtiene |
 | --- | --- |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API → `service_role` (secreto) |
+| `SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
+| `SUPABASE_ANON_KEY` | Supabase → Project Settings → API → `anon` `public` |
 
-También se admiten los nombres `SUPABASE_URL` / `SUPABASE_ANON_KEY` o los de
-convención Next.js `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-(ya configurados en este proyecto).
+También se admiten los nombres de convención Next.js `NEXT_PUBLIC_SUPABASE_URL` /
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
-La clave `service_role` **nunca** se envía al navegador: solo se usa en las rutas
-de servidor (`/app/api/**`). Es la que permite crear pedidos, guardar cambios del
-panel administrador, subir imágenes y ejecutar copias de seguridad. Sin ella el
-despliegue no arranca y esas funciones no operan.
+No se usa ninguna clave privada: cada pedido, cambio del panel, subida de imagen y
+copia de seguridad se ejecuta en el servidor con la **sesión del usuario** y las
+políticas RLS (`public.is_admin()` habilita el panel). La compra completa vive en la
+función de Postgres `create_order_from_cart`, que valida precios, stock y saldo
+dentro de la base de datos.
 
 ### 3. Nombrar tu cuenta administradora
 
@@ -82,8 +84,8 @@ No subas claves al repositorio.
 | `/cuenta`, `/login`, `/registro` | `/admin/actividad`, `/admin/backups` |
 | `/configuracion` (diagnóstico) | |
 
-`/configuracion` muestra en vivo el estado de la conexión, de la clave de servicio
-y del esquema, con los pasos que falten.
+`/configuracion` muestra en vivo el estado de la conexión y del esquema, con los
+pasos que falten.
 
 ## Copias de seguridad
 
@@ -98,7 +100,11 @@ y del esquema, con los pasos que falten.
 
 ## Seguridad
 
-- Roles `admin` / `cliente` con RLS; la clave de servicio nunca llega al cliente.
+- Roles `admin` / `cliente` con RLS; el servidor no guarda ninguna clave privada.
+- El checkout corre en `create_order_from_cart`: precios, stock y saldo se validan
+  en Postgres, así que el navegador no puede alterar importes ni duplicar pedidos.
+- Triggers `profiles_guard`, `orders_guard` y `payments_guard` impiden que un cliente
+  cambie su saldo, su rol o el estado de pago de un pedido.
 - Compras bloqueadas en el servidor cuando el modo mantenimiento está activo.
 - Verificación de pagos antes de confirmar pedidos y protección contra duplicados.
 - Registro de operaciones administrativas en `admin_logs`.
