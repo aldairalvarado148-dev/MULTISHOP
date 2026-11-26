@@ -113,7 +113,7 @@ async function logAction(
   });
 }
 
-function client() {
+async function client() {
   if (!hasDataAccess()) return null;
   return await createSupabaseAdminClient();
 }
@@ -121,7 +121,7 @@ function client() {
 export async function POST(request: Request, { params }: { params: Promise<{ entity: string }> }) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-  const admin = client();
+  const admin = await client();
   if (!admin) return NextResponse.json({ error: "La tienda aún no está configurada en Supabase." }, { status: 503 });
 
   const { entity } = await params;
@@ -158,7 +158,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ent
 export async function PATCH(request: Request, { params }: { params: Promise<{ entity: string }> }) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-  const admin = client();
+  const admin = await client();
   if (!admin) return NextResponse.json({ error: "La tienda aún no está configurada en Supabase." }, { status: 503 });
 
   const { entity } = await params;
@@ -194,7 +194,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ en
 export async function DELETE(request: Request, { params }: { params: Promise<{ entity: string }> }) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-  const admin = client();
+  const admin = await client();
   if (!admin) return NextResponse.json({ error: "La tienda aún no está configurada en Supabase." }, { status: 503 });
 
   const { entity } = await params;
