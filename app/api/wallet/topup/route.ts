@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hasDataAccess } from "@/lib/env";
 import { getMaintenanceSettings } from "@/lib/settings";
+import { PROOF_BUCKET } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -53,12 +54,13 @@ export async function POST(request: Request) {
     const path = `topups/${user.id}/${Date.now()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
     const { error: uploadError } = await admin.storage
-      .from("multishop")
+      .from(PROOF_BUCKET)
       .upload(path, buffer, { contentType: file.type, upsert: true });
     if (uploadError) {
       return NextResponse.json({ error: `No se pudo subir: ${uploadError.message}` }, { status: 500 });
     }
-    proofUrl = admin.storage.from("multishop").getPublicUrl(path).data.publicUrl;
+    // Bucket privado: se guarda la ruta y el panel la firma al abrirla.
+    proofUrl = path;
   }
 
   const { error } = await admin.from("wallet_topups").insert({

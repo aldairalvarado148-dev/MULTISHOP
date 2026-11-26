@@ -445,9 +445,39 @@ insert into storage.buckets (id, name, public) values ('comprobantes', 'comproba
 
 drop policy if exists media_public_read on storage.objects;
 create policy media_public_read on storage.objects for select using (bucket_id = 'media');
+
+-- comprobantes: privado. La ruta es <carpeta>/<uuid>/<archivo>, así que el dueño
+-- se comprueba por carpeta (independiente de cómo guarde Supabase el propietario).
 drop policy if exists comprobantes_owner_read on storage.objects;
 create policy comprobantes_owner_read on storage.objects for select
-  using (bucket_id = 'comprobantes' and (owner = auth.uid() or public.is_admin()));
+  using (
+    bucket_id = 'comprobantes'
+    and (public.is_admin() or (storage.foldername(name))[2] = auth.uid()::text)
+  );
+
+-- subida de imágenes: solo administradores
+drop policy if exists media_admin_insert on storage.objects;
+create policy media_admin_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'media' and public.is_admin());
+
+-- subida de comprobantes: solo en la carpeta del propio usuario
+drop policy if exists comprobantes_owner_insert on storage.objects;
+create policy comprobantes_owner_insert on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'comprobantes'
+    and (storage.foldername(name))[2] = auth.uid()::text
+  );
+
+drop policy if exists comprobantes_owner_update on storage.objects;
+create policy comprobantes_owner_update on storage.objects for update to authenticated
+  using (
+    bucket_id = 'comprobantes'
+    and (public.is_admin() or (storage.foldername(name))[2] = auth.uid()::text)
+  )
+  with check (
+    bucket_id = 'comprobantes'
+    and (public.is_admin() or (storage.foldername(name))[2] = auth.uid()::text)
+  );
 
 -- ------------------------------------------------------------
 -- 17. DATOS INICIALES (solo las 2 categorías solicitadas)

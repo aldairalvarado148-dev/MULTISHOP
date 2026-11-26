@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { hasDataAccess } from "@/lib/env";
 import { getStoreSettings } from "@/lib/settings";
+import { resolveProofLink } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,16 @@ export default async function AdminPaymentsPage() {
       created_at: t.created_at,
     };
   });
+
+  // Los comprobantes viven en un bucket privado: se firman enlaces temporales.
+  await Promise.all([
+    ...paymentRows.map(async (row) => {
+      row.proof_url = await resolveProofLink(row.proof_url);
+    }),
+    ...topupRows.map(async (row) => {
+      row.proof_url = await resolveProofLink(row.proof_url);
+    }),
+  ]);
 
   return (
     <div>

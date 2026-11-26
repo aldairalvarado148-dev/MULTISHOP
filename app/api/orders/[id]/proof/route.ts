@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hasDataAccess } from "@/lib/env";
+import { PROOF_BUCKET } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -51,14 +52,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error: uploadError } = await admin.storage
-    .from("multishop")
+    .from(PROOF_BUCKET)
     .upload(path, buffer, { contentType: file.type, upsert: true });
 
   if (uploadError) {
     return NextResponse.json({ error: `No se pudo subir: ${uploadError.message}` }, { status: 500 });
   }
 
-  const { data: publicUrl } = admin.storage.from("multishop").getPublicUrl(path);
+  // El bucket de comprobantes es privado: se guarda la ruta y se firma al mostrarla.
+  const { data: signed } = await admin.storage.from(PROOF_BUCKET).createSignedUrl(path, 60 * 60);
 
   const { data: existing } = await admin
     .from("payments")
@@ -71,7 +73,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (existing?.id) {
     await admin
       .from("payments")
-      .update({ proof_url: publicUrl.publicUrl, reference: reference || null, status: "en_revision" })
+      .update({ proof_url: path, reference: reference || null, status: "en_revision" })
       .eq("id", existing.id);
   } else {
     await admin.from("payments").insert({
@@ -80,7 +82,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       amount: 0,
       method: "transferencia",
       status: "en_revision",
-      proof_url: publicUrl.publicUrl,
+      proof_url: path,
       reference: reference || null,
     });
   }
@@ -99,5 +101,5 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     link: `/compras/${order.id}`,
   });
 
-  return NextResponse.json({ ok: true, proofUrl: publicUrl.publicUrl });
+  return NextResponse.json({ ok: true, proofUrl: signed?.signedUrl ?? null });
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hasDataAccess } from "@/lib/env";
+import { MEDIA_BUCKET } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -35,11 +36,11 @@ export async function POST(request: Request) {
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error } = await admin.storage
-    .from("multishop")
+    .from(MEDIA_BUCKET)
     .upload(path, buffer, { contentType: file.type, upsert: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const { data } = admin.storage.from("multishop").getPublicUrl(path);
+  const { data } = admin.storage.from(MEDIA_BUCKET).getPublicUrl(path);
   return NextResponse.json({ ok: true, url: data.publicUrl, path });
 }
